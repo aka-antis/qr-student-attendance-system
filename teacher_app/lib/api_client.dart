@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  final String baseUrl;
+  String baseUrl;
   String? _token;
 
   ApiClient(this.baseUrl);

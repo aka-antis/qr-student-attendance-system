@@ -13,8 +13,33 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final user = TextEditingController(text: 'teacher');
   final pass = TextEditingController(text: 'teacher123');
-  final base = TextEditingController(text: 'http://10.0.2.2:5189');
+  final base = TextEditingController(text: 'http://localhost:5189');
   String msg = '';
+  bool busy = false;
+
+  Future<void> doLogin() async {
+    setState(() {
+      busy = true;
+      msg = '';
+    });
+    try {
+      widget.api.baseUrl = base.text.trim().replaceAll(RegExp(r'/+$'), '');
+      final r = await widget.api.login(user.text.trim(), pass.text);
+      if (!mounted) return;
+      if (r['ok'] == true) {
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => MeetingsScreen(api: widget.api)));
+      } else {
+        setState(() => msg = r['message'].toString());
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => msg =
+          'Cannot reach API at ${base.text.trim()}. Is the API running, and is the base URL correct? ($e)');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,22 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
           TextField(controller: pass, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
           const SizedBox(height: 12),
           ElevatedButton(
-              onPressed: () async {
-                // Allow overriding base URL at login time.
-                widget.api.baseUrl.isNotEmpty;
-                final r = await widget.api.login(user.text.trim(), pass.text);
-                if (!mounted) return;
-                if (r['ok'] == true) {
-                  Navigator.pushReplacement(context,
-                      MaterialPageRoute(builder: (_) => MeetingsScreen(api: widget.api)));
-                } else {
-                  setState(() => msg = r['message'].toString());
-                }
-              },
-              child: const Text('Login')),
+              onPressed: busy ? null : doLogin,
+              child: Text(busy ? 'Logging in…' : 'Login')),
           Text(msg, style: const TextStyle(color: Colors.red)),
           const SizedBox(height: 8),
-          const Text('Emulator: use http://10.0.2.2:PORT. Physical device: use PC LAN IP.',
+          const Text('Web/Windows: use http://localhost:PORT. Android emulator: use http://10.0.2.2:PORT. Physical device: use PC LAN IP.',
               style: TextStyle(color: Colors.grey)),
         ]),
       ),
