@@ -29,12 +29,14 @@ button.ghost{background:#eee;color:#222}
 <button onclick="login()">Login</button>
 <span id="tok"></span>
 </div>
-<div class="card noprint">
+<div class="card" id="studentsCard">
 <h3>2) Students + QR cards</h3>
+<div class="noprint">
 <button onclick="loadStudents()">Load students</button>
-<button onclick="window.print()">Print cards</button>
+<button onclick="printCards()">Print cards</button>
 <input id="sname" placeholder="Full name"/> <input id="scode" placeholder="StudentCode"/>
 <button onclick="addStudent()">Add student</button>
+</div>
 <div id="students" class="qr-grid"></div>
 </div>
 <div class="card noprint">
@@ -71,6 +73,13 @@ async function addStudent(){
  alert(r.ok?'Added':'Error: '+await r.text()); loadStudents();
 }
 async function regen(id){await fetch(base()+`/api/students/${id}/regenerate`,{method:'POST',headers:H()});loadStudents();}
+function printCards(){
+ if(!document.querySelectorAll('#students .qrcard').length){
+  alert('No cards to print. Click "Load students" first (and log in if needed).');
+  return;
+ }
+ window.print();
+}
 async function addMeeting(){
  const r=await fetch(base()+'/api/meetings',{method:'POST',headers:H(),body:JSON.stringify({courseName:$('course').value,date:$('mdate').value,startTime:$('mstart').value,endTime:$('mend').value})});
  alert(r.ok?'Created':'Error: '+await r.text()); loadMeetings();
