@@ -51,7 +51,7 @@ button.ghost{background:#eee;color:#222}
 <h3>4) Attendance</h3>
 <input id="mid" type="number" placeholder="meetingId"/>
 <button onclick="loadAttendance()">View meeting attendance</button>
-<a id="csv" href="#">Export CSV</a>
+<button onclick="exportCsv()">Export CSV</button>
 <div id="att"></div>
 </div>
 </main>
@@ -89,9 +89,25 @@ async function loadMeetings(){
  $('meetings').innerHTML=j.map(m=>`#${m.id} ${m.courseName} ${m.date} ${m.startTime}-${m.endTime} (${m.attendedCount})`).join('<br/>');
 }
 async function loadAttendance(){
- const id=$('mid').value; $('csv').href=base()+`/api/reports/meeting/${id}/export.csv`;
- const r=await fetch(base()+`/api/reports/meeting/${id}`,{headers:H()}); const j=await r.json();
+ const id=$('mid').value;
+ if(!id){$('att').textContent='Enter a meetingId first.';return;}
+ const r=await fetch(base()+`/api/reports/meeting/${id}`,{headers:H()});
+ const j=await r.json();
+ if(!r.ok){$('att').textContent='Error: '+(j.message||JSON.stringify(j));return;}
  $('att').innerHTML=`Count: ${j.count}<br/>`+(j.rows||[]).map(x=>`${x.studentName} (${x.studentCode}) @ ${x.scannedAt}`).join('<br/>');
+}
+async function exportCsv(){
+ const id=$('mid').value;
+ if(!id){alert('Enter a meetingId first.');return;}
+ // Plain links can't send the JWT, so download with an authenticated request.
+ const r=await fetch(base()+`/api/reports/meeting/${id}/export.csv`,{headers:H()});
+ if(!r.ok){alert('Export failed: '+await r.text());return;}
+ const blob=await r.blob();
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);
+ a.download=`meeting-${id}-attendance.csv`;
+ document.body.appendChild(a); a.click(); a.remove();
+ setTimeout(()=>URL.revokeObjectURL(a.href),5000);
 }
 $('mdate').value=new Date().toISOString().slice(0,10);
 </script>
