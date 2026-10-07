@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Attendance QR – Dashboard</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;margin:0;background:#f4f6f8;color:#222}
+header{background:#111c2e;color:#fff;padding:14px 20px;display:flex;gap:12px;align-items:center}
+main{padding:20px;max-width:1000px;margin:auto}
+.card{background:#fff;border-radius:10px;padding:16px;margin:12px 0;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+input,select,button{padding:8px 10px;margin:4px;border-radius:6px;border:1px solid #ccc}
+button{background:#1a73e8;color:#fff;border:none;cursor:pointer}
+button.ghost{background:#eee;color:#222}
+.qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.qrcard{border:1px solid #ddd;border-radius:10px;padding:12px;text-align:center;background:#fff}
+.qrcard img{width:180px;height:180px}
+@media print{header,.noprint{display:none}body{background:#fff}.qrcard{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header><h2 style="margin:0">Attendance QR – Admin</h2><span id="who"></span></header>
+<main>
+<div class="card noprint">
+<h3>1) Login</h3>
+<input id="base" value="http://localhost:5189" size="28"/>
+<input id="user" value="admin" placeholder="username"/>
+<input id="pass" value="admin123" type="password" placeholder="password"/>
+<button onclick="login()">Login</button>
+<span id="tok"></span>
+</div>
+<div class="card noprint">
+<h3>2) Students + QR cards</h3>
+<button onclick="loadStudents()">Load students</button>
+<button onclick="window.print()">Print cards</button>
+<input id="sname" placeholder="Full name"/> <input id="scode" placeholder="StudentCode"/>
+<button onclick="addStudent()">Add student</button>
+<div id="students" class="qr-grid"></div>
+</div>
+<div class="card noprint">
+<h3>3) Meetings</h3>
+<input id="course" placeholder="Course name" value="Math 101"/>
+<input id="mdate" type="date"/> <input id="mstart" type="time" value="09:00"/> <input id="mend" type="time" value="10:00"/>
+<button onclick="addMeeting()">Create meeting</button>
+<button onclick="loadMeetings()">Load meetings</button>
+<div id="meetings"></div>
+</div>
+<div class="card noprint">
+<h3>4) Attendance</h3>
+<input id="mid" type="number" placeholder="meetingId"/>
+<button onclick="loadAttendance()">View meeting attendance</button>
+<a id="csv" href="#">Export CSV</a>
+<div id="att"></div>
+</div>
+</main>
+<script>
+let JWT='';
+const $=id=>document.getElementById(id);
+const H=()=>({'Content-Type':'application/json',...(JWT?{'Authorization':'Bearer '+JWT}:{})});
+function base(){return $('base').value.replace(/\/$/,'')}
+async function login(){
+ const r=await fetch(base()+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('user').value,password:$('pass').value})});
+ const j=await r.json(); if(r.ok){JWT=j.token;$('tok').textContent='OK: '+j.fullName;$('who').textContent=j.fullName;} else alert(JSON.stringify(j));
+}
+async function loadStudents(){
+ const r=await fetch(base()+'/api/students',{headers:H()}); const j=await r.json();
+ $('students').innerHTML=j.map(s=>`<div class="qrcard"><b>${s.fullName}</b><br/><small>${s.studentCode}</small><br/>${s.activeToken?`<img src="${base()}/api/students/${s.id}/qr.png"/><br/><small style="word-break:break-all">${s.activeToken}</small><br/><button class="noprint" onclick="regen(${s.id})">Regenerate</button>`:'<i>no token</i>'}</div>`).join('');
+}
+async function addStudent(){
+ const r=await fetch(base()+'/api/students',{method:'POST',headers:H(),body:JSON.stringify({fullName:$('sname').value,studentCode:$('scode').value})});
+ alert(r.ok?'Added':'Error: '+await r.text()); loadStudents();
+}
+async function regen(id){await fetch(base()+`/api/students/${id}/regenerate`,{method:'POST',headers:H()});loadStudents();}
+async function addMeeting(){
+ const r=await fetch(base()+'/api/meetings',{method:'POST',headers:H(),body:JSON.stringify({courseName:$('course').value,date:$('mdate').value,startTime:$('mstart').value,endTime:$('mend').value})});
+ alert(r.ok?'Created':'Error: '+await r.text()); loadMeetings();
+}
+async function loadMeetings(){
+ const r=await fetch(base()+'/api/meetings',{headers:H()}); const j=await r.json();
+ $('meetings').innerHTML=j.map(m=>`#${m.id} ${m.courseName} ${m.date} ${m.startTime}-${m.endTime} (${m.attendedCount})`).join('<br/>');
+}
+async function loadAttendance(){
+ const id=$('mid').value; $('csv').href=base()+`/api/reports/meeting/${id}/export.csv`;
+ const r=await fetch(base()+`/api/reports/meeting/${id}`,{headers:H()}); const j=await r.json();
+ $('att').innerHTML=`Count: ${j.count}<br/>`+(j.rows||[]).map(x=>`${x.studentName} (${x.studentCode}) @ ${x.scannedAt}`).join('<br/>');
+}
+$('mdate').value=new Date().toISOString().slice(0,10);
+</script>
+</body>
+</html>
