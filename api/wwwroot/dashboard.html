@@ -17,6 +17,8 @@ button:disabled{background:#999;cursor:default}
 .qrcard{border:1px solid #ddd;border-radius:10px;padding:12px;text-align:center;background:#fff}
 .qrcard img{width:180px;height:180px}
 @media print{header,.noprint{display:none}body{background:#fff}main{max-width:none}.card{box-shadow:none}.qrcard{break-inside:avoid}}
+body.print-single .qrcard{display:none}
+body.print-single .qrcard.print-this{display:block;border:none}
 </style>
 </head>
 <body>
@@ -72,7 +74,7 @@ async function login(){
 function cardHtml(s,qr){
  const img=qr&&qr.qrBase64?`<img alt="QR code for ${esc(s.fullName)}" src="data:image/png;base64,${qr.qrBase64}"/>`:'<i>no QR — regenerate</i>';
  const tok=qr&&qr.token?`<br/><small style="word-break:break-all">${esc(qr.token)}</small>`:'';
- return `<div class="qrcard"><b>${esc(s.fullName)}</b><br/><small>${esc(s.studentCode)}</small><br/>${img}${tok}<br/><button class="noprint" data-regen="${s.id}">Regenerate</button> <button class="noprint" data-del="${s.id}">Delete</button></div>`;
+ return `<div class="qrcard"><b>${esc(s.fullName)}</b><br/><small>${esc(s.studentCode)}</small><br/>${img}${tok}<br/><button class="noprint" data-regen="${s.id}">Regenerate</button> <button class="noprint" data-printone="${s.id}">Print card</button> <button class="noprint" data-del="${s.id}">Delete</button></div>`;
 }
 async function loadStudents(){
  if(needLogin())return;
@@ -89,6 +91,18 @@ async function loadStudents(){
  $('students').innerHTML=cards.join('');
  $('students').querySelectorAll('[data-regen]').forEach(b=>b.addEventListener('click',()=>regen(Number(b.dataset.regen))));
  $('students').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>delStudent(Number(b.dataset.del),b)));
+ $('students').querySelectorAll('[data-printone]').forEach(b=>b.addEventListener('click',()=>printOneCard(b)));
+}
+function printOneCard(btn){
+ const card=btn.closest('.qrcard');
+ if(!card)return;
+ const done=()=>{card.classList.remove('print-this');document.body.classList.remove('print-single');window.removeEventListener('afterprint',done);};
+ document.querySelectorAll('#students .qrcard.print-this').forEach(c=>c.classList.remove('print-this'));
+ card.classList.add('print-this');
+ document.body.classList.add('print-single');
+ window.addEventListener('afterprint',done);
+ setTimeout(done,5000); // fallback if afterprint doesn't fire
+ window.print();
 }
 async function delStudent(id,btn){
  const name=btn.closest('.qrcard')?.querySelector('b')?.textContent||('#'+id);
