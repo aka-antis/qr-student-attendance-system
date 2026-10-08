@@ -6,13 +6,6 @@ automatically — no paper registers, no manual data entry.
 
 Built with **ASP.NET Core** (C#) and **Flutter** (Dart).
 
-## Screenshots / Demo
-
-<!-- Add dashboard screenshot here: docs/screenshots/dashboard.png -->
-<!-- Add teacher app login screenshot here: docs/screenshots/app-login.png -->
-<!-- Add QR scanner screenshot here: docs/screenshots/app-scanner.png -->
-<!-- Add attendance history screenshot here: docs/screenshots/app-history.png -->
-
 ## Features
 
 - Student management (create, update, deactivate, search)
@@ -163,3 +156,9 @@ flutter run -d edge   # or a connected device; set the API base URL on the login
 - Additional export formats (Excel/PDF)
 - Bulk student import
 - Deployment templates for one-click hosting
+
+## Customization & Business Inquiries
+
+Need a customized version of this system? I can adapt it to your requirements.
+
+**For custom development or business inquiries, contact me at [aka.antis@gmail.com](mailto:aka.antis@gmail.com).**
