@@ -72,7 +72,7 @@ async function login(){
 function cardHtml(s,qr){
  const img=qr&&qr.qrBase64?`<img alt="QR code for ${esc(s.fullName)}" src="data:image/png;base64,${qr.qrBase64}"/>`:'<i>no QR — regenerate</i>';
  const tok=qr&&qr.token?`<br/><small style="word-break:break-all">${esc(qr.token)}</small>`:'';
- return `<div class="qrcard"><b>${esc(s.fullName)}</b><br/><small>${esc(s.studentCode)}</small><br/>${img}${tok}<br/><button class="noprint" data-regen="${s.id}">Regenerate</button></div>`;
+ return `<div class="qrcard"><b>${esc(s.fullName)}</b><br/><small>${esc(s.studentCode)}</small><br/>${img}${tok}<br/><button class="noprint" data-regen="${s.id}">Regenerate</button> <button class="noprint" data-del="${s.id}">Delete</button></div>`;
 }
 async function loadStudents(){
  if(needLogin())return;
@@ -88,6 +88,14 @@ async function loadStudents(){
  }));
  $('students').innerHTML=cards.join('');
  $('students').querySelectorAll('[data-regen]').forEach(b=>b.addEventListener('click',()=>regen(Number(b.dataset.regen))));
+ $('students').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>delStudent(Number(b.dataset.del),b)));
+}
+async function delStudent(id,btn){
+ const name=btn.closest('.qrcard')?.querySelector('b')?.textContent||('#'+id);
+ if(!confirm(`Delete student "${name}"? This also removes their QR tokens and attendance records.`))return;
+ const r=await fetch(base()+`/api/students/${id}`,{method:'DELETE',headers:H()});
+ if(!r.ok)alert('Error: '+await r.text());
+ loadStudents();
 }
 async function addStudent(){
  if(needLogin())return;
