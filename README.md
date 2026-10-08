@@ -5,19 +5,6 @@ an opaque random token — no personal data is encoded in the QR itself. A teach
 card with the Flutter mobile app, the API resolves the student server-side from the token,
 and records attendance for the selected class meeting.
 
-## Screenshots
-
-> Screenshots are not yet included. To add them, place PNG files under `docs/screenshots/`
-> and reference them here, e.g.:
->
-> - `docs/screenshots/dashboard.png` — admin dashboard with QR cards
-> - `docs/screenshots/teacher-app-login.png` — teacher app login
-> - `docs/screenshots/teacher-app-scanner.png` — QR scanning during a meeting
->
-> ```markdown
-> ![Admin dashboard](docs/screenshots/dashboard.png)
-> ```
-
 ## Architecture
 
 ```mermaid
@@ -56,7 +43,7 @@ qr-student-attendance-system/
     Services/                    # Secure token generation, QR rendering, JWT issuance
     Dtos/                        # Validated request/response contracts
     wwwroot/dashboard.html       # Admin dashboard + QR card printing
-    appsettings.json             # Non-secret defaults (NO secrets committed)
+    appsettings.json             # Default settings (secrets come from environment variables)
     appsettings.Production.json # Production template (HTTPS + SQL Server, no secrets)
   teacher_app/                   # Flutter teacher app
     lib/
