@@ -26,7 +26,7 @@ public class MeetingsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Get(int id)
     {
         var m = await db.Meetings.FindAsync(id);
-        return m is null ? NotFound() : Ok(m);
+        return m is null ? NotFound(new { message = "Meeting not found." }) : Ok(m);
     }
 
     [HttpPost]
@@ -53,7 +53,7 @@ public class MeetingsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var m = await db.Meetings.FindAsync(id);
-        if (m is null) return NotFound();
+        if (m is null) return NotFound(new { message = "Meeting not found." });
         db.Meetings.Remove(m);
         await db.SaveChangesAsync();
         return Ok(new { message = "Deleted." });

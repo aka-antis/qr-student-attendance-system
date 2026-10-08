@@ -9,7 +9,7 @@ namespace Api.Controllers;
 
 [ApiController]
 [Route("api/teachers")]
-[Authorize]
+[Authorize(Roles = "Admin")]
 public class TeachersController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
@@ -19,7 +19,6 @@ public class TeachersController(AppDbContext db) : ControllerBase
         .ToListAsync());
 
     [HttpPost]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create(CreateTeacherRequest req)
     {
         if (await db.Teachers.AnyAsync(t => t.Username == req.Username))
@@ -39,7 +38,6 @@ public class TeachersController(AppDbContext db) : ControllerBase
     }
 
     [HttpPut("{id:int}/deactivate")]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Deactivate(int id)
     {
         var t = await db.Teachers.FindAsync(id);

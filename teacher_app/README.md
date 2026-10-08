@@ -31,4 +31,4 @@ flutter run
 
 - `http` – API calls
 - `mobile_scanner` – QR camera scanning
-- `shared_preferences` – JWT storage
+- `flutter_secure_storage` – encrypted JWT storage

@@ -6,6 +6,10 @@ using System.Text;
 
 namespace Api.Controllers;
 
+/// <summary>
+/// Meeting-level attendance lists are visible to teachers (needed to run a class).
+/// Student histories and CSV exports are Admin-only.
+/// </summary>
 [ApiController]
 [Route("api/reports")]
 [Authorize]
@@ -25,6 +29,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("student/{studentId:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> StudentReport(int studentId)
     {
         var student = await db.Students.FindAsync(studentId);
@@ -46,10 +51,11 @@ public class ReportsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("meeting/{meetingId:int}/export.csv")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ExportMeetingCsv(int meetingId)
     {
         var meeting = await db.Meetings.FindAsync(meetingId);
-        if (meeting is null) return NotFound();
+        if (meeting is null) return NotFound(new { message = "Meeting not found." });
         var rows = await db.AttendanceRecords.Include(a => a.Student)
             .Where(a => a.MeetingId == meetingId)
             .OrderBy(a => a.Student!.FullName).ToListAsync();
@@ -60,6 +66,7 @@ public class ReportsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("export.csv")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> ExportAllCsv([FromQuery] int? meetingId, [FromQuery] int? studentId)
     {
         var q = db.AttendanceRecords.Include(a => a.Student).Include(a => a.Meeting).AsQueryable();

@@ -11,7 +11,7 @@ namespace Api.Controllers;
 [ApiController]
 [Route("api/attendance")]
 [Authorize]
-public class AttendanceController(AppDbContext db) : ControllerBase
+public class AttendanceController(AppDbContext db, IConfiguration cfg) : ControllerBase
 {
     /// <summary>
     /// Core scan endpoint. Client sends ONLY meetingId + raw QR token.
@@ -20,13 +20,16 @@ public class AttendanceController(AppDbContext db) : ControllerBase
     [HttpPost("scan")]
     public async Task<ActionResult<ScanResponse>> Scan(ScanRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Token))
+        var token = req.Token.Trim();
+        if (token.Length == 0)
             return BadRequest(new ScanResponse("error", "Empty QR token.", null, null, req.MeetingId, null));
 
-        var token = req.Token.Trim();
-        var meetingExists = await db.Meetings.AnyAsync(m => m.Id == req.MeetingId);
-        if (!meetingExists)
+        var meeting = await db.Meetings.FindAsync(req.MeetingId);
+        if (meeting is null)
             return NotFound(new ScanResponse("error", "Meeting not found.", null, null, req.MeetingId, null));
+
+        if (IsOutsideMeetingWindow(meeting, out var windowMessage))
+            return BadRequest(new ScanResponse("error", windowMessage, null, null, req.MeetingId, null));
 
         // Resolve student from token ONLY if token is active.
         var qr = await db.QrTokens.Include(t => t.Student)
@@ -69,6 +72,7 @@ public class AttendanceController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> List([FromQuery] int? meetingId, [FromQuery] int? studentId, [FromQuery] string? search)
     {
         var q = db.AttendanceRecords
@@ -100,9 +104,32 @@ public class AttendanceController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         var a = await db.AttendanceRecords.FindAsync(id);
-        if (a is null) return NotFound();
+        if (a is null) return NotFound(new { message = "Attendance record not found." });
         db.AttendanceRecords.Remove(a);
         await db.SaveChangesAsync();
         return Ok(new { message = "Deleted." });
+    }
+
+    /// <summary>
+    /// Optional guard (off by default): reject scans outside the meeting's
+    /// scheduled window. Enable with Attendance:EnforceMeetingWindow=true.
+    /// Compared in server-local time since meetings are scheduled locally.
+    /// </summary>
+    private bool IsOutsideMeetingWindow(Meeting meeting, out string message)
+    {
+        message = string.Empty;
+        if (!cfg.GetValue<bool>("Attendance:EnforceMeetingWindow", false))
+            return false;
+        var grace = cfg.GetValue<int>("Attendance:GraceMinutes", 15);
+        var start = meeting.Date.ToDateTime(meeting.StartTime).AddMinutes(-grace);
+        var end = meeting.Date.ToDateTime(meeting.EndTime).AddMinutes(grace);
+        var now = DateTime.Now;
+        if (now < start || now > end)
+        {
+            message = $"Scan rejected: outside the meeting window " +
+                $"({meeting.Date:yyyy-MM-dd} {meeting.StartTime:HH\\:mm}-{meeting.EndTime:HH\\:mm}, +/-{grace} min).";
+            return true;
+        }
+        return false;
     }
 }

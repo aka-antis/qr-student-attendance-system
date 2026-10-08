@@ -8,9 +8,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Controllers;
 
+/// <summary>
+/// Admin-only: student records and QR token lifecycle.
+/// Raw tokens are exposed ONLY through GetQr/Regenerate — never in list/detail responses.
+/// </summary>
 [ApiController]
 [Route("api/students")]
-[Authorize]
+[Authorize(Roles = "Admin")]
 public class StudentsController(AppDbContext db) : ControllerBase
 {
     [HttpGet]
@@ -23,7 +27,7 @@ public class StudentsController(AppDbContext db) : ControllerBase
             .Select(s => new
             {
                 s.Id, s.FullName, s.StudentCode, s.Phone, s.IsActive, s.CreatedAt,
-                ActiveToken = s.QrTokens.Where(t => t.IsActive).Select(t => t.Token).FirstOrDefault()
+                HasActiveToken = s.QrTokens.Any(t => t.IsActive)
             }).ToListAsync();
         return Ok(students);
     }
@@ -31,14 +35,15 @@ public class StudentsController(AppDbContext db) : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Get(int id)
     {
-        var s = await db.Students.Include(x => x.QrTokens).FirstOrDefaultAsync(x => x.Id == id);
-        if (s is null) return NotFound();
-        return Ok(new
-        {
-            s.Id, s.FullName, s.StudentCode, s.Phone, s.IsActive,
-            ActiveToken = s.QrTokens.FirstOrDefault(t => t.IsActive)?.Token,
-            TokensCount = s.QrTokens.Count
-        });
+        var s = await db.Students
+            .Select(x => new
+            {
+                x.Id, x.FullName, x.StudentCode, x.Phone, x.IsActive,
+                HasActiveToken = x.QrTokens.Any(t => t.IsActive),
+                TokensCount = x.QrTokens.Count
+            }).FirstOrDefaultAsync(x => x.Id == id);
+        if (s is null) return NotFound(new { message = "Student not found." });
+        return Ok(s);
     }
 
     [HttpPost]
@@ -55,7 +60,7 @@ public class StudentsController(AppDbContext db) : ControllerBase
         db.Students.Add(s);
         await db.SaveChangesAsync();
 
-        // Issue first token immediately.
+        // Issue first token immediately (returned only here and via GetQr).
         var token = await IssueNewTokenAsync(s.Id);
         return CreatedAtAction(nameof(Get), new { id = s.Id },
             new { s.Id, s.FullName, s.StudentCode, ActiveToken = token });
@@ -65,7 +70,7 @@ public class StudentsController(AppDbContext db) : ControllerBase
     public async Task<IActionResult> Update(int id, UpdateStudentRequest req)
     {
         var s = await db.Students.FindAsync(id);
-        if (s is null) return NotFound();
+        if (s is null) return NotFound(new { message = "Student not found." });
         s.FullName = req.FullName.Trim();
         s.Phone = req.Phone?.Trim();
         s.IsActive = req.IsActive;
@@ -74,17 +79,17 @@ public class StudentsController(AppDbContext db) : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         var s = await db.Students.FindAsync(id);
-        if (s is null) return NotFound();
+        if (s is null) return NotFound(new { message = "Student not found." });
         db.Students.Remove(s);
         await db.SaveChangesAsync();
         return Ok(new { message = "Deleted." });
     }
 
-    // Returns student info + QR payload (token only inside QR) + base64 PNG.
+    // Sole token-issuing read endpoint (besides Create/Regenerate responses).
+    // QR encodes ONLY the token; name/code are shown outside the QR.
     [HttpGet("{id:int}/qr")]
     public async Task<IActionResult> GetQr(int id)
     {
@@ -104,20 +109,20 @@ public class StudentsController(AppDbContext db) : ControllerBase
     }
 
     [HttpGet("{id:int}/qr.png")]
-    [AllowAnonymous] // printable card image; token itself is unguessable
     public async Task<IActionResult> GetQrPng(int id)
     {
         var active = await db.QrTokens
             .Where(t => t.StudentId == id && t.IsActive)
             .Select(t => t.Token).FirstOrDefaultAsync();
-        if (active is null) return NotFound();
+        if (active is null) return NotFound(new { message = "No active QR token." });
         return File(QrCodeService.GeneratePng(active), "image/png", $"student-{id}-qr.png");
     }
 
     [HttpPost("{id:int}/regenerate")]
     public async Task<IActionResult> Regenerate(int id)
     {
-        if (!await db.Students.AnyAsync(s => s.Id == id)) return NotFound();
+        if (!await db.Students.AnyAsync(s => s.Id == id))
+            return NotFound(new { message = "Student not found." });
         var token = await IssueNewTokenAsync(id);
         return Ok(new { token, qrBase64 = QrCodeService.GenerateBase64Png(token) });
     }
