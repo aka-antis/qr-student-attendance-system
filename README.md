@@ -1,227 +1,165 @@
 # QR Student Attendance System
 
-A QR-code based student attendance system. Each student gets a printable QR card containing
-an opaque random token — no personal data is encoded in the QR itself. A teacher scans the
-card with the Flutter mobile app, the API resolves the student server-side from the token,
-and records attendance for the selected class meeting.
+A QR-code based attendance system for schools and training centers. Each student receives a
+printed QR card, teachers scan cards with a mobile app, and attendance is recorded
+automatically — no paper registers, no manual data entry.
 
-## Architecture
+Built with **ASP.NET Core** (C#) and **Flutter** (Dart).
 
-```mermaid
-flowchart LR
-    subgraph Admin["Admin (web dashboard)"]
-        D[dashboard.html]
-    end
-    subgraph Teacher["Teacher (Flutter app)"]
-        A[Login] --> B[Meetings] --> C[Scanner] --> H[Meeting report]
-    end
-    subgraph API["ASP.NET Core API"]
-        AUTH[Auth/JWT] --> SCAN[POST /attendance/scan]
-        SCAN -->|token lookup| TOK[(QrTokens)]
-        TOK -->|student| STU[(Students)]
-        SCAN -->|insert + unique guard| ATT[(AttendanceRecords)]
-        MTG[(Meetings)] --- ATT
-    end
-    D -->|admin JWT| API
-    A -->|teacher JWT| API
-    C -->|{meetingId, token} only| SCAN
-    QR[Printed QR card<br/>random token only] --> C
-```
+## Screenshots / Demo
 
-Key principle: the QR holds only an opaque random token. The mobile app never sends a
-student identity — the backend resolves the student from the active token, stamps the
-server time, and enforces one record per `Student + Meeting` with a database unique index.
+<!-- Add dashboard screenshot here: docs/screenshots/dashboard.png -->
+<!-- Add teacher app login screenshot here: docs/screenshots/app-login.png -->
+<!-- Add QR scanner screenshot here: docs/screenshots/app-scanner.png -->
+<!-- Add attendance history screenshot here: docs/screenshots/app-history.png -->
 
-## Repository structure
+## Features
+
+- Student management (create, update, deactivate, search)
+- Unique QR code per student, backed by a secure random token
+- Printable QR cards with QR image plus student info
+- QR token regeneration and revocation
+- Teacher authentication with Admin and Teacher roles
+- Class/meeting management (course, date, start/end time)
+- QR attendance scanning from the mobile app
+- Automatic server-side attendance timestamps
+- Duplicate attendance prevention (database unique constraint)
+- Attendance reports and per-student history with percentages
+- CSV export of attendance records
+- Web dashboard for administration and card printing
+
+## How It Works
+
+1. An admin registers a student and the system issues a random QR token.
+2. The student receives a printed QR card.
+3. The teacher selects the current class meeting in the mobile app and scans the card.
+4. The API resolves the student from the token — the app never sends a student identity.
+5. Attendance is recorded with the server's current time.
+6. Reports and attendance percentages update immediately.
+
+## Security
+
+- QR codes contain only an opaque random token (32 bytes from a cryptographic random
+  generator) — no names, IDs, or phone numbers.
+- Raw tokens are exposed only through the QR issuing endpoints, never in list responses.
+- Authentication uses JWT Bearer tokens; passwords are BCrypt-hashed.
+- Role-based authorization: teachers can only run classes (meetings, scanning, meeting
+  lists); student, QR, teacher-account, deletion, history, and export operations are
+  Admin-only.
+- Duplicate attendance is enforced by a database-level unique constraint, including
+  under concurrent scans.
+
+## Tech Stack
+
+Backend:
+
+- C#, ASP.NET Core Web API
+- Entity Framework Core
+- SQL Server (production), SQLite (local development)
+- JWT Bearer authentication, BCrypt password hashing
+- QRCoder (QR image generation)
+
+Mobile:
+
+- Flutter, Dart
+- mobile_scanner (QR camera scanning)
+- http (API calls), flutter_secure_storage (encrypted JWT storage)
+
+Frontend:
+
+- Vanilla HTML, CSS, and JavaScript (admin dashboard, no frameworks)
+
+## Project Structure
 
 ```
 qr-student-attendance-system/
-  api/                           # ASP.NET Core Web API (.NET 10)
-    Controllers/                 # Auth, Teachers, Students, Meetings, Attendance, Reports
-    Models/                      # Teacher, Student, QrToken, Meeting, AttendanceRecord
-    Data/                        # AppDbContext + EF Core migrations
-    Services/                    # Secure token generation, QR rendering, JWT issuance
-    Dtos/                        # Validated request/response contracts
-    wwwroot/dashboard.html       # Admin dashboard + QR card printing
-    appsettings.json             # Default settings (secrets come from environment variables)
-    appsettings.Production.json # Production template (HTTPS + SQL Server, no secrets)
-  teacher_app/                   # Flutter teacher app
-    lib/
-      main.dart
-      api_client.dart            # JWT in flutter_secure_storage
-      screens/                   # login, meetings, scanner, history
+  api/                      # ASP.NET Core Web API
+    Controllers/            # Auth, Teachers, Students, Meetings, Attendance, Reports
+    Models/                 # Teacher, Student, QrToken, Meeting, AttendanceRecord
+    Data/                   # EF Core DbContext and migrations
+    Services/               # Token generation, QR rendering, JWT issuance
+    wwwroot/dashboard.html  # Admin dashboard and QR card printing
+  teacher_app/              # Flutter teacher app
+    lib/screens/            # Login, meetings, scanner, history
 ```
 
-## Tech stack
+## API
 
-| Layer      | Technology                                                     |
-| ---------- | -------------------------------------------------------------- |
-| Backend    | ASP.NET Core Web API, Entity Framework Core                    |
-| Database   | SQL Server (production) / SQLite (local development fallback)  |
-| QR         | QRCoder (backend PNG generation), `mobile_scanner` (Flutter)   |
-| Auth       | JWT Bearer, BCrypt password hashing                            |
-| Mobile     | Flutter (`http`, `mobile_scanner`, `flutter_secure_storage`)   |
+Authenticated with JWT Bearer tokens (teachers log in via the mobile app or dashboard).
+The API surface covers authentication, teachers, students and their QR lifecycle,
+meetings, attendance scanning, reports, and CSV export. In Development the machine-readable
+API specification is served at `/openapi/v1.json`.
 
-## Setup
+## Database
 
-### Prerequisites
+- **Teachers** — login accounts with Admin or Teacher roles.
+- **Students** — profiles with a unique student code.
+- **QrTokens** — token-to-student mapping; unique token index, one active token per student.
+- **Meetings** — course name, date, start/end time, creating teacher.
+- **AttendanceRecords** — student, meeting, server timestamp, scanning teacher, with a
+  unique constraint on student plus meeting.
+
+## Running Locally
+
+Prerequisites:
 
 - .NET 10 SDK
-- SQL Server (optional — SQLite is used by default for local development)
 - Flutter SDK 3.4+ (for the mobile app)
-
-### 1. Run the API (development)
+- SQL Server is optional — SQLite is used by default for local development
 
 ```powershell
+# 1. Clone the repository
+git clone https://github.com/aka-antis/qr-student-attendance-system.git
+cd qr-student-attendance-system
+
+# 2. Start the API (database is created automatically on first run)
 cd api
 dotnet run --urls "http://localhost:5189"
 ```
 
-- Dashboard: `http://localhost:5189/dashboard.html`
-- OpenAPI document (Development only): `http://localhost:5189/openapi/v1.json`
+Dashboard: `http://localhost:5189/dashboard.html`
 
-On first start the database is created via EF Core migrations. Demo accounts are seeded
-**in Development only** (`SeedDemoUsers` defaults to true locally, false in production):
+Connection strings and JWT settings live in `api/appsettings.json` (defaults) and
+environment-specific files. Key settings:
 
-> **Development-only demo credentials — never enabled in production:**
->
-> | Username  | Password    | Role    |
-> | --------- | ----------- | ------- |
-> | admin     | admin123    | Admin   |
-> | teacher   | teacher123  | Teacher |
+| Setting | Purpose |
+| ------- | ------- |
+| `Database:Provider` | `Sqlite` (default) or `SqlServer` |
+| `ConnectionStrings:Default` | SQL Server connection string (production via `ConnectionStrings__Default` env var) |
+| `Jwt:Key` | Signing key (production via `Jwt__Key` env var, required) |
+| `Cors:AllowedOrigins` | Allowed browser origins |
+| `Attendance:EnforceMeetingWindow` | Optionally reject scans outside class time |
 
-The local dev JWT key lives in `api/appsettings.Development.json`, which is git-ignored
-and never committed.
-
-### 2. Run the teacher app
+Run the Flutter app:
 
 ```bash
 cd teacher_app
 flutter pub get
-flutter run -d edge     # or: flutter run -d windows, or a connected phone
-flutter test            # widget smoke test
+flutter run -d edge   # or a connected device; set the API base URL on the login screen
 ```
 
-Set the API base URL in the app's login screen:
+## Demo Credentials
 
-- Web/Windows: `http://localhost:5189`
-- Android emulator: `http://10.0.2.2:5189`
-- Physical device: `http://<your-PC-LAN-IP>:5189` (same Wi-Fi, API still running)
+> **DEVELOPMENT / DEMO ONLY — seeded automatically in Development builds.
+> Change or remove these accounts before any production use.**
 
-Typical session: log in, select the current meeting, scan a student's QR card
-(or paste a token into the manual entry field), and confirm the student's name
-on the success message.
+| Username  | Password    | Role    |
+| --------- | ----------- | ------- |
+| admin     | admin123    | Admin   |
+| teacher   | teacher123  | Teacher |
 
-### 3. Production deployment
+## Production / Security Notes
 
-1. Publish the API behind HTTPS (reverse proxy or platform TLS; the app enforces
-   HSTS + HTTPS redirection outside Development).
-2. Use SQL Server: set `Database:Provider` to `SqlServer` (see
-   `api/appsettings.Production.json`). The schema is created automatically on
-   first boot; later schema changes should be applied as reviewed SQL generated
-   with `dotnet ef migrations script` (run with `Database__Provider=SqlServer`),
-   because the bundled migrations are scaffolded for the SQLite dev loop.
-3. Provide secrets **only via environment variables** (never in committed files):
-   - `ConnectionStrings__Default` = SQL Server connection string
-   - `Jwt__Key` = long random secret (≥ 32 chars; the app refuses to start in
-     Production without it)
-4. Restrict browsers via `Cors:AllowedOrigins` (exact origins, e.g.
-   `["https://your-teacher-app-host.example.com"]`). Mobile apps are unaffected by CORS.
-5. Ensure `SeedDemoUsers` is **not** enabled in production (default off).
-6. Optionally enforce class-time scanning with `Attendance:EnforceMeetingWindow=true`
-   (plus `Attendance:GraceMinutes`, default 15).
+- Replace the JWT secret (`Jwt__Key` environment variable, at least 32 characters) —
+  the app refuses to start in Production without it.
+- Remove or replace the demo credentials; never enable demo seeding in production.
+- Use SQL Server with a real connection string and serve the API behind HTTPS.
+- Configure `Cors:AllowedOrigins` with the exact production origins.
 
-## How attendance works
+## Future Improvements
 
-1. An admin creates a student. The API issues a random token and renders its QR code.
-2. The student receives a printed QR card (QR image plus name/code printed alongside it).
-3. A teacher (or admin) creates a meeting (course, date, start/end time).
-4. The teacher opens the meeting in the mobile app and scans QR cards.
-5. The app sends only `{ meetingId, token }` to `POST /api/attendance/scan`.
-6. The API looks up the active token, resolves the student, optionally checks the
-   meeting time window, and inserts an attendance row stamped with the server time.
-   A repeat scan of the same student in the same meeting returns `409 duplicate`
-   instead of creating a second row.
-
-## QR cards
-
-- `GET /api/students/{id}/qr` (Admin) returns the active token, student info, and a Base64 PNG.
-- `GET /api/students/{id}/qr.png` (Admin) returns the QR image directly for download.
-- `POST /api/students/{id}/regenerate` (Admin) revokes the old token and issues a new one.
-- `POST /api/students/{id}/revoke` (Admin) revokes all active tokens for the student.
-- The dashboard lists all students with their QR cards and offers one-click printing.
-- Raw tokens never appear in student list/detail responses — only the QR endpoints
-  (and the create/regenerate responses) expose them.
-
-## API overview
-
-All endpoints except `POST /api/auth/login` require a JWT Bearer token.
-`A` = Admin, `T` = Teacher.
-
-| Method | Endpoint                              | Roles | Description                                  |
-| ------ | ------------------------------------- | ----- | -------------------------------------------- |
-| POST   | `/api/auth/login`                     | —     | Log in, receive JWT                          |
-| GET    | `/api/auth/me`                        | A, T  | Current teacher profile                      |
-| GET    | `/api/teachers`                       | A     | List teachers                                |
-| POST   | `/api/teachers`                       | A     | Create teacher                               |
-| PUT    | `/api/teachers/{id}/deactivate`       | A     | Deactivate teacher                           |
-| GET    | `/api/students?search=`               | A     | List/search students (no raw tokens)         |
-| POST   | `/api/students`                       | A     | Create student + issue first token           |
-| GET    | `/api/students/{id}`                  | A     | Student details (no raw token)               |
-| PUT    | `/api/students/{id}`                  | A     | Update student                               |
-| DELETE | `/api/students/{id}`                  | A     | Delete student                               |
-| GET    | `/api/students/{id}/qr`               | A     | Active token + QR image (Base64)             |
-| GET    | `/api/students/{id}/qr.png`           | A     | QR image download                            |
-| POST   | `/api/students/{id}/regenerate`       | A     | Revoke old token, issue a new one            |
-| POST   | `/api/students/{id}/revoke`           | A     | Revoke all active tokens                     |
-| GET    | `/api/meetings`                       | A, T  | List meetings with attendance counts         |
-| GET    | `/api/meetings/{id}`                  | A, T  | Meeting details                              |
-| POST   | `/api/meetings`                       | A, T  | Create meeting                               |
-| DELETE | `/api/meetings/{id}`                  | A     | Delete meeting                               |
-| POST   | `/api/attendance/scan`                | A, T  | Record attendance from a QR token            |
-| GET    | `/api/attendance`                     | A     | Search/filter attendance records             |
-| DELETE | `/api/attendance/{id}`                | A     | Delete an attendance record                  |
-| GET    | `/api/reports/meeting/{id}`           | A, T  | Attendance list for a meeting                |
-| GET    | `/api/reports/student/{id}`           | A     | Student history + attendance percentage      |
-| GET    | `/api/reports/meeting/{id}/export.csv`| A     | Export a meeting's attendance as CSV         |
-| GET    | `/api/reports/export.csv`             | A     | Export filtered attendance as CSV            |
-
-Teachers hold the minimum needed to run a class: log in, list/create meetings,
-scan QR codes, and view the current meeting's attendance list. Everything else —
-students, QR lifecycle, teacher accounts, deletions, student histories, exports —
-is Admin-only and enforced server-side (including the `Student + Meeting` unique
-index, which even guards against concurrent duplicate scans).
-
-### Scan responses
-
-| HTTP | `status`    | Meaning                                                  |
-| ---- | ----------- | -------------------------------------------------------- |
-| 200  | `success`   | Attendance recorded; response includes the student name   |
-| 409  | `duplicate` | Student already recorded for this meeting                 |
-| 400  | `error`     | Invalid/revoked/empty token, or outside meeting window    |
-| 404  | `error`     | Meeting not found                                         |
-
-Validation failures return `400` with a consistent `{ message, errors }` shape.
-
-## Configuration reference (`api/appsettings.json`)
-
-| Key                              | Default     | Notes                                                        |
-| -------------------------------- | ----------- | ------------------------------------------------------------ |
-| `Database:Provider`              | `Sqlite`    | `SqlServer` in production                                    |
-| `ConnectionStrings:Default`      | local       | Override via `ConnectionStrings__Default` env var            |
-| `Jwt:Key`                        | placeholder | Override via `Jwt__Key` env var / dev-only file; required in Production |
-| `Cors:AllowedOrigins`            | `[]`        | Exact browser origins; dev-only fallback to allow-any        |
-| `Attendance:EnforceMeetingWindow`| `false`     | Reject scans outside `[start−grace, end+grace]` (server-local time) |
-| `Attendance:GraceMinutes`        | `15`        | Grace period around the meeting window                       |
-| `SeedDemoUsers`                  | dev-only    | Never enable in production                                   |
-
-## Security notes
-
-- QR codes contain only the random token — never names, IDs, or phone numbers.
-- The mobile app never sends a student identity; the backend resolves it from the token.
-- Only active, non-revoked tokens belonging to active students are accepted.
-- Passwords are BCrypt-hashed; authorization is enforced per endpoint with role checks.
-- JWTs are stored in encrypted platform storage on mobile (`flutter_secure_storage`).
-- The dashboard escapes all server-provided strings before rendering (no raw `innerHTML`).
-- No secrets are committed: dev key lives in git-ignored `appsettings.Development.json`,
-  production secrets come from environment variables.
+- Push notifications for absence alerts
+- Attendance analytics and charts
+- Additional export formats (Excel/PDF)
+- Bulk student import
+- Deployment templates for one-click hosting
